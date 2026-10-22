@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "skills": {
+    "anti-prose-slop": {
+      "source": "proseify.xyz",
+      "sourceType": "well-known",
+      "computedHash": "1871562c0ca6cba5e61aace794169b3cdbefefd670f84f42915b73ba02d8b237"
+    },
+    "install-anti-slop": {
+      "source": "dmmulroy/anti-slop",
+      "sourceType": "github",
+      "skillPath": "skills/install-anti-slop/SKILL.md",
+      "computedHash": "8d8038a81dba0c91ad935793d9fcc3f5ae5844e376b4b4113108213d91d42ea8"
+    }
+  }
+}

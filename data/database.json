@@ -1,0 +1,41 @@
+{
+  "users": [
+    {
+      "id": "usr_1792609218601_f194372f",
+      "username": "yasir",
+      "email": "yasir@example.com",
+      "passwordHash": "2b291ca5d3bbb477d59cf2d9f8b5f237f0505310ef045f5c1db26e7ab2f193925c065014c1933c7d357724f9f8c21b25b0604030da45a97ddbdac0ef7fd63c85",
+      "salt": "0bd09b46eb04c336b508ec1bbf93d390",
+      "createdAt": "2026-10-21T19:00:18.602Z",
+      "whatsappToken": "r1D5UfhNuNSigZz1jWZE",
+      "whatsappTargetPhone": "6281931905436",
+      "whatsappAlertsEnabled": true,
+      "telegramBotToken": "8658692614:AAFEe9y3wSanpCs3qF4gJ2o4QH7-shC6bso",
+      "telegramAlertsEnabled": true,
+      "notifiedAlerts": {},
+      "notifiedWhatsAppAlerts": {}
+    }
+  ],
+  "tasks": [
+    {
+      "userId": "usr_1792609218601_f194372f",
+      "title": "Tugas Besar Pemrograman Web",
+      "course": "Pemrograman Web",
+      "type": "tugas",
+      "due": "2026-10-25T16:59:00.000Z",
+      "desc": "",
+      "done": false,
+      "isManual": true,
+      "id": "task_1792609267757_42405b0d",
+      "createdAt": "2026-10-21T19:01:07.760Z"
+    }
+  ],
+  "notes": [],
+  "sessions": [],
+  "settings": {
+    "telegramAlertsEnabled": true,
+    "notifiedAlerts": {},
+    "whatsappAlertsEnabled": true,
+    "notifiedWhatsAppAlerts": {}
+  }
+}

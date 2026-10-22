@@ -1,0 +1,244 @@
+import { NextRequest, NextResponse } from "next/server";
+
+export type ItemStatus = "sudah" | "belum" | "draft" | "tertinggal";
+
+export interface DeadlineEvent {
+  id: string;
+  title: string;
+  course: string;
+  type: "tugas" | "kuis" | "forum" | "kelompok";
+  due: string;
+  link?: string;
+  desc?: string;
+  status: ItemStatus;
+  cmid?: string;
+  timelineMatch?: boolean;
+}
+
+export interface EvaluatedStatusResult {
+  status: ItemStatus;
+  timelineMatch: boolean;
+}
+
+const TYPE_RULES: [string, "kelompok" | "kuis" | "forum"][] = [
+  ["kelompok", "kelompok"],
+  ["group", "kelompok"],
+  ["quiz", "kuis"],
+  ["kuis", "kuis"],
+  ["ujian", "kuis"],
+  ["uts", "kuis"],
+  ["uas", "kuis"],
+  ["forum", "forum"],
+  ["diskusi", "forum"],
+];
+
+function classify(text: string): "tugas" | "kuis" | "forum" | "kelompok" {
+  const t = text.toLowerCase();
+
+  for (const [kw, typ] of TYPE_RULES) {
+    if (t.includes(kw)) {
+      return typ;
+    }
+  }
+
+  return "tugas";
+}
+
+function unescapeIcs(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\,/g, ",")
+    .replace(/\\;/g, ";")
+    .replace(/\\\\/g, "\\");
+}
+
+function parseDt(v: string): string | null {
+  const raw = v.trim();
+
+  try {
+    if (raw.endsWith("Z")) {
+      const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/);
+
+      if (match) {
+        const [, Y, M, D, h, m, s] = match;
+        const d = new Date(Date.UTC(+Y, +M - 1, +D, +h, +m, +s));
+
+        return d.toISOString();
+      }
+    }
+
+    if (raw.includes("T")) {
+      const match = raw.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/);
+
+      if (match) {
+        const [, Y, M, D, h, m, s] = match;
+        const d = new Date(Date.UTC(+Y, +M - 1, +D, +h - 7, +m, +s));
+
+        return d.toISOString();
+      }
+    }
+
+    const matchDateOnly = raw.match(/^(\d{4})(\d{2})(\d{2})$/);
+
+    if (matchDateOnly) {
+      const [, Y, M, D] = matchDateOnly;
+      const d = new Date(Date.UTC(+Y, +M - 1, +D, 23 - 7, 59, 0));
+
+      return d.toISOString();
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractCmid(url?: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  const match = url.match(/[?&]id=(\d+)/);
+
+  return match ? match[1] : null;
+}
+
+function evaluateStatus(dueIso: string): EvaluatedStatusResult {
+  const now = Date.now();
+  const dueMs = new Date(dueIso).getTime();
+
+  if (dueMs < now) {
+    return {
+      status: "tertinggal",
+      timelineMatch: false,
+    } satisfies EvaluatedStatusResult;
+  }
+
+  return {
+    status: "belum",
+    timelineMatch: false,
+  } satisfies EvaluatedStatusResult;
+}
+
+export function parseIcs(text: string): DeadlineEvent[] {
+  const unfolded = text.replace(/\r?\n[ \t]/g, "");
+  const events: DeadlineEvent[] = [];
+  const veventRegex = /BEGIN:VEVENT([\s\S]*?)END:VEVENT/gi;
+
+  let match: RegExpExecArray | null;
+
+  while ((match = veventRegex.exec(unfolded)) !== null) {
+    const block = match[1];
+    const fields: Record<string, string> = {};
+    const lines = block.split(/\r?\n/);
+
+    for (const line of lines) {
+      const colonIdx = line.indexOf(":");
+
+      if (colonIdx === -1) {
+        continue;
+      }
+
+      const keyPart = line.substring(0, colonIdx);
+      const val = line.substring(colonIdx + 1);
+      const mainKey = keyPart.split(";")[0].toUpperCase().trim();
+
+      fields[mainKey] = val;
+    }
+
+    const dtStartRaw = fields["DTSTART"] || "";
+    const dueIso = parseDt(dtStartRaw);
+
+    if (!dueIso) {
+      continue;
+    }
+
+    const title = unescapeIcs(fields["SUMMARY"] || "(Tanpa Judul)");
+    const desc = unescapeIcs(fields["DESCRIPTION"] || "");
+    const course = unescapeIcs(fields["CATEGORIES"] || "") || "Umum / LMS";
+    const link = (fields["URL"] || "").trim();
+    const id = fields["UID"] || `${title}-${dueIso}`;
+    const cmid = extractCmid(link) || undefined;
+
+    const { status, timelineMatch } = evaluateStatus(dueIso);
+
+    events.push({
+      id,
+      title,
+      course,
+      type: classify(`${title} ${desc}`),
+      due: dueIso,
+      link,
+      desc: desc.substring(0, 300),
+      status,
+      cmid,
+      timelineMatch,
+    });
+  }
+
+  events.sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime());
+
+  return events;
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const customUrl = searchParams.get("url");
+  const envUrl = process.env.ICAL_URL;
+  const targetUrl = customUrl || envUrl;
+
+  if (!targetUrl) {
+    return NextResponse.json(
+      {
+        configured: false,
+        error: "Link iCal belum diatur. Masukkan URL kalender LMS Anda di menu Pengaturan.",
+        updated: Math.floor(Date.now() / 1000),
+        items: [],
+      },
+      { status: 200 }
+    );
+  }
+
+  try {
+    const res = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PengingatTugas/1.0",
+      },
+      next: { revalidate: 300 },
+    });
+
+    if (!res.ok) {
+      return NextResponse.json(
+        {
+          configured: true,
+          error: `LMS merespon dengan status ${res.status} (${res.statusText})`,
+          updated: Math.floor(Date.now() / 1000),
+          items: [],
+        },
+        { status: 502 }
+      );
+    }
+
+    const icsText = await res.text();
+    const items = parseIcs(icsText);
+
+    return NextResponse.json({
+      configured: true,
+      updated: Math.floor(Date.now() / 1000),
+      items,
+      count: items.length,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+
+    return NextResponse.json(
+      {
+        configured: true,
+        error: `Gagal mengambil data iCal: ${message}`,
+        updated: Math.floor(Date.now() / 1000),
+        items: [],
+      },
+      { status: 500 }
+    );
+  }
+}

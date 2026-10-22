@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tenggat Kuliah</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#14231e;--mute:#5d6f68;--line:#d9e2de;
+--tugas:#2457d6;--kuis:#c2410c;--forum:#0f766e;--kelompok:#7c3aed;--late:#b91c1c;
+--f1:'Bricolage Grotesque',system-ui,sans-serif;--f2:'Figtree',system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1a16;--card:#17261f;--ink:#e8f1ed;--mute:#9ab0a7;--line:#27393f;
+--tugas:#7da2ff;--kuis:#fb9b6b;--forum:#5eead4;--kelompok:#c4a5ff;--late:#fca5a5}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--f2);padding:env(safe-area-inset-top) 0 40px}
+main{max-width:760px;margin:0 auto;padding:24px 16px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+h1{font:800 clamp(2rem,6vw,2.8rem)/1 var(--f1);margin:0;letter-spacing:-.02em}
+.sub{color:var(--mute);font-size:.9rem;margin-top:6px}
+button,select{font:inherit;color:inherit}
+.btn{background:var(--ink);color:var(--bg);border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.next{margin:22px 0 8px;padding:20px;border-radius:14px;background:var(--ink);color:var(--bg)}
+.next small{opacity:.7}
+.next .t{font:700 1.4rem/1.2 var(--f1);margin:4px 0}
+.next .cd{font:800 2.4rem/1 var(--f1);margin-top:10px;font-variant-numeric:tabular-nums}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 13px;cursor:pointer;font-size:.9rem}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+h2{font:700 1.05rem var(--f1);margin:26px 0 8px;color:var(--mute)}
+.item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;background:var(--card);
+border:1px solid var(--line);border-left:5px solid var(--c);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.item.done{opacity:.45}.item.done .ti{text-decoration:line-through}
+.item input{width:20px;height:20px;margin-top:3px;accent-color:var(--c)}
+.ti{font-weight:600;color:inherit;text-decoration:none}a.ti:hover{text-decoration:underline}
+.meta{color:var(--mute);font-size:.85rem}
+.tag{color:var(--c);font-weight:600}
+.when{text-align:right;font-size:.85rem;white-space:nowrap}
+.when b{display:block;font-size:.95rem}.late b{color:var(--late)}
+.empty,.err{padding:24px;text-align:center;color:var(--mute);border:1px dashed var(--line);border-radius:10px}
+.err{color:var(--late)}
+:focus-visible{outline:3px solid var(--tugas);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1>Tenggat Kuliah</h1><div class="sub" id="upd">Memuat…</div></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn ghost" id="notif">Aktifkan notifikasi</button>
+    <button class="btn" id="refresh">Muat ulang</button>
+  </div>
+</header>
+<section class="next" id="next" hidden></section>
+<div class="bar" id="filters" role="group" aria-label="Filter jenis"></div>
+<div id="list"></div>
+</main>
+<script>
+const TYPES={semua:'Semua',tugas:'Tugas',kuis:'Kuis',forum:'Forum',kelompok:'Kelompok'};
+const REMIND=[24*60,3*60,60]; // menit sebelum tenggat
+let items=[],filter='semua';
+const $=id=>document.getElementById(id);
+const store={get:(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let done=store.get('done',{}), fired=store.get('fired',{});
+const fmtDate=d=>d.toLocaleString('id-ID',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+function left(ms){const a=Math.abs(ms),d=Math.floor(a/864e5),h=Math.floor(a%864e5/36e5),m=Math.floor(a%36e5/6e4);
+  return d?`${d} hari ${h} jam`:h?`${h} jam ${m} mnt`:`${m} mnt`}
+
+async function load(){
+  $('upd').textContent='Memuat…';
+  try{
+    const r=await fetch('/api/deadlines'); const j=await r.json();
+    if(!r.ok) throw new Error(j.error||'Gagal memuat');
+    items=j.items; $('upd').textContent='Diperbarui '+new Date(j.updated*1000).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+    render();
+  }catch(e){ $('list').innerHTML=`<div class="err">${e.message}<br>Cek file .env dan pastikan ICAL_URL benar.</div>`; $('upd').textContent='Gagal memuat'}
+}
+
+function render(){
+  $('filters').innerHTML=Object.entries(TYPES).map(([k,v])=>`<button class="chip" aria-pressed="${k===filter}" data-f="${k}">${v}</button>`).join('');
+  const now=Date.now(), horizon=now-3*864e5;
+  const vis=items.filter(i=>(filter==='semua'||i.type===filter)&&new Date(i.due)>horizon);
+  const pending=items.filter(i=>!done[i.id]&&new Date(i.due)>now);
+  const n=pending[0], box=$('next');
+  if(n){box.hidden=false;box.innerHTML=`<small>Tenggat terdekat · ${n.course}</small><div class="t">${n.title}</div><div class="cd" id="cd"></div>`;}
+  else box.hidden=true;
+  const groups={};
+  vis.forEach(i=>{const d=new Date(i.due);const k=d.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long'});(groups[k]??=[]).push(i)});
+  const html=Object.entries(groups).map(([k,arr])=>`<h2>${k}</h2>`+arr.map(i=>{
+    const d=new Date(i.due),ms=d-now,late=ms<0&&!done[i.id];
+    const t=i.link?`<a class="ti" href="${i.link}" target="_blank" rel="noopener">${i.title}</a>`:`<span class="ti">${i.title}</span>`;
+    return `<article class="item ${done[i.id]?'done':''} ${late?'late':''}" style="--c:var(--${i.type})">
+      <input type="checkbox" data-id="${i.id}" ${done[i.id]?'checked':''} aria-label="Tandai selesai">
+      <div>${t}<div class="meta"><span class="tag">${TYPES[i.type]}</span> · ${i.course}</div></div>
+      <div class="when"><b>${d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</b>${late?'terlambat '+left(ms):left(ms)+' lagi'}</div></article>`}).join('')).join('');
+  $('list').innerHTML=html||'<div class="empty">Tidak ada tenggat untuk filter ini.</div>';
+  tick();
+}
+
+function tick(){
+  const now=Date.now(), n=items.find(i=>!done[i.id]&&new Date(i.due)>now), cd=$('cd');
+  if(n&&cd) cd.textContent=left(new Date(n.due)-now);
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  items.forEach(i=>{ if(done[i.id]) return; const m=(new Date(i.due)-now)/6e4;
+    REMIND.forEach(r=>{ const key=i.id+'@'+r; if(m>0&&m<=r&&!fired[key]){
+      fired[key]=1; store.set('fired',fired);
+      new Notification(`${TYPES[i.type]}: ${i.title}`,{body:`${i.course} · ${left(new Date(i.due)-now)} lagi`});}})});
+}
+
+document.addEventListener('click',e=>{
+  const f=e.target.dataset.f; if(f){filter=f;render()}
+});
+document.addEventListener('change',e=>{
+  const id=e.target.dataset.id; if(id){done[id]=e.target.checked;if(!e.target.checked)delete done[id];store.set('done',done);render()}
+});
+$('refresh').onclick=load;
+$('notif').onclick=async()=>{ if(!('Notification' in window)) return alert('Browser tidak mendukung notifikasi');
+  const p=await Notification.requestPermission(); $('notif').textContent=p==='granted'?'Notifikasi aktif':'Notifikasi ditolak'};
+if('Notification' in window&&Notification.permission==='granted') $('notif').textContent='Notifikasi aktif';
+setInterval(tick,30000); setInterval(load,30*6e4); load();
+</script>
+</body>
+</html>
