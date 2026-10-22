@@ -12,6 +12,7 @@ export interface DeadlineEvent {
   course: string;
   type: "tugas" | "kuis" | "forum" | "kelompok";
   due: string;
+  openTime?: string;
   link?: string;
   desc?: string;
   status: ItemStatus;
@@ -124,9 +125,70 @@ function evaluateStatus(dueIso: string): EvaluatedStatusResult {
   } satisfies EvaluatedStatusResult;
 }
 
+function resolveCourseName(cat: string, title: string, desc: string): string {
+  const unescaped = unescapeIcs(cat).trim();
+  const fullText = `${unescaped} ${title} ${desc}`.toLowerCase();
+
+  if (fullText.includes("cdk3aab3") || fullText.includes("manpro") || fullText.includes("time management")) {
+    return "Manajemen Proyek";
+  }
+
+  if (
+    fullText.includes("cdk3eab3") ||
+    fullText.includes("deret waktu") ||
+    fullText.includes("arima") ||
+    fullText.includes("arma") ||
+    fullText.includes("kuis minggu")
+  ) {
+    return "Analisis Deret Waktu";
+  }
+
+  if (
+    fullText.includes("cdk3fab3") ||
+    fullText.includes("mis") ||
+    fullText.includes("eis") ||
+    fullText.includes("organisasi")
+  ) {
+    return "Sistem Informasi Manajemen";
+  }
+
+  if (fullText.includes("cdk3gab1") || fullText.includes("sdum")) {
+    return "Sosio Digital untuk Masyarakat";
+  }
+
+  if (
+    fullText.includes("cdk3bab4") ||
+    fullText.includes("uml") ||
+    fullText.includes("tubes final") ||
+    fullText.includes("class diagram") ||
+    fullText.includes("quiz minggu ke-")
+  ) {
+    return "Pemrograman Berorientasi Objek";
+  }
+
+  if (fullText.includes("cdk4cab3") || fullText.includes("essay") || fullText.includes("feedback")) {
+    return "Bahasa Inggris / Academic Writing";
+  }
+
+  return unescaped || "Umum / LMS";
+}
+
+interface RawEventItem {
+  id: string;
+  rawTitle: string;
+  baseTitle: string;
+  suffix: "opens" | "closes" | "is_due" | "other";
+  course: string;
+  type: "tugas" | "kuis" | "forum" | "kelompok";
+  dueIso: string;
+  link?: string;
+  desc: string;
+  cmid?: string;
+}
+
 export function parseIcs(text: string): DeadlineEvent[] {
   const unfolded = text.replace(/\r?\n[ \t]/g, "");
-  const events: DeadlineEvent[] = [];
+  const rawEvents: RawEventItem[] = [];
   const veventRegex = /BEGIN:VEVENT([\s\S]*?)END:VEVENT/gi;
 
   let match: RegExpExecArray | null;
@@ -157,27 +219,122 @@ export function parseIcs(text: string): DeadlineEvent[] {
       continue;
     }
 
-    const title = unescapeIcs(fields["SUMMARY"] || "(Tanpa Judul)");
-    const desc = unescapeIcs(fields["DESCRIPTION"] || "");
-    const course = unescapeIcs(fields["CATEGORIES"] || "") || "Umum / LMS";
+    const rawTitle = unescapeIcs(fields["SUMMARY"] || "(Tanpa Judul)").trim();
+    const desc = unescapeIcs(fields["DESCRIPTION"] || "").trim();
+    const cat = fields["CATEGORIES"] || "";
     const link = (fields["URL"] || "").trim();
-    const id = fields["UID"] || `${title}-${dueIso}`;
+    const id = fields["UID"] || `${rawTitle}-${dueIso}`;
     const cmid = extractCmid(link) || undefined;
+    const course = resolveCourseName(cat, rawTitle, desc);
+    const itemType = classify(`${rawTitle} ${desc}`);
 
-    const { status, timelineMatch } = evaluateStatus(dueIso);
+    let suffix: "opens" | "closes" | "is_due" | "other" = "other";
+    let baseTitle = rawTitle;
 
-    events.push({
+    const closesMatch = rawTitle.match(/^(.*?)\s+closes$/i);
+    const opensMatch = rawTitle.match(/^(.*?)\s+opens$/i);
+    const isDueMatch = rawTitle.match(/^(.*?)\s+is due$/i);
+
+    if (closesMatch) {
+      suffix = "closes";
+      baseTitle = closesMatch[1].trim();
+    } else if (opensMatch) {
+      suffix = "opens";
+      baseTitle = opensMatch[1].trim();
+    } else if (isDueMatch) {
+      suffix = "is_due";
+      baseTitle = isDueMatch[1].trim();
+    }
+
+    rawEvents.push({
       id,
-      title,
+      rawTitle,
+      baseTitle,
+      suffix,
       course,
-      type: classify(`${title} ${desc}`),
-      due: dueIso,
+      type: itemType,
+      dueIso,
       link,
       desc: desc.substring(0, 300),
-      status,
       cmid,
-      timelineMatch,
     });
+  }
+
+  // Map opens events by baseTitle so we can pair with closes events
+  const opensMap = new Map<string, RawEventItem>();
+  const pairedOpenIds = new Set<string>();
+
+  for (const item of rawEvents) {
+    if (item.suffix === "opens") {
+      opensMap.set(item.baseTitle.toLowerCase(), item);
+    }
+  }
+
+  const events: DeadlineEvent[] = [];
+
+  // 1. Process closes events (the genuine deadline for quizzes)
+  for (const item of rawEvents) {
+    if (item.suffix === "closes") {
+      const openCounterpart = opensMap.get(item.baseTitle.toLowerCase());
+
+      if (openCounterpart) {
+        pairedOpenIds.add(openCounterpart.id);
+      }
+
+      const { status, timelineMatch } = evaluateStatus(item.dueIso);
+
+      events.push({
+        id: item.id,
+        title: item.baseTitle,
+        course: item.course,
+        type: "kuis",
+        due: item.dueIso,
+        openTime: openCounterpart ? openCounterpart.dueIso : undefined,
+        link: item.link || openCounterpart?.link,
+        desc: item.desc || openCounterpart?.desc,
+        status,
+        cmid: item.cmid || openCounterpart?.cmid,
+        timelineMatch,
+      });
+    }
+  }
+
+  // 2. Process opens events that have no closes counterpart (announcements without closing deadline)
+  for (const item of rawEvents) {
+    if (item.suffix === "opens" && !pairedOpenIds.has(item.id)) {
+      events.push({
+        id: item.id,
+        title: item.baseTitle,
+        course: item.course,
+        type: "kuis",
+        due: item.dueIso,
+        link: item.link,
+        desc: item.desc,
+        status: "belum",
+        cmid: item.cmid,
+        timelineMatch: false,
+      });
+    }
+  }
+
+  // 3. Process is_due (assignment submissions) and standard events
+  for (const item of rawEvents) {
+    if (item.suffix === "is_due" || item.suffix === "other") {
+      const { status, timelineMatch } = evaluateStatus(item.dueIso);
+
+      events.push({
+        id: item.id,
+        title: item.baseTitle,
+        course: item.course,
+        type: item.type,
+        due: item.dueIso,
+        link: item.link,
+        desc: item.desc,
+        status,
+        cmid: item.cmid,
+        timelineMatch,
+      });
+    }
   }
 
   events.sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime());

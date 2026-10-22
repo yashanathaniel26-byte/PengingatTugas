@@ -38,6 +38,7 @@ export interface DeadlineItem {
   course: string;
   type: "tugas" | "kuis" | "forum" | "kelompok" | "manual";
   due: string;
+  openTime?: string;
   link?: string;
   desc?: string;
   isManual?: boolean;
@@ -1816,6 +1817,29 @@ export default function Home() {
 
                             <span className={`type-pill type-${item.type}`}>{item.type}</span>
                             <span className="course-tag">{item.course}</span>
+
+                            {item.openTime && !isDone && (
+                              <span
+                                className="course-tag"
+                                style={{
+                                  fontSize: "0.72rem",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background:
+                                    new Date(item.openTime).getTime() <= currentTime
+                                      ? "rgba(16, 185, 129, 0.12)"
+                                      : "rgba(100, 116, 139, 0.12)",
+                                  color:
+                                    new Date(item.openTime).getTime() <= currentTime
+                                      ? "var(--accent-emerald)"
+                                      : "var(--text-muted)",
+                                }}
+                              >
+                                {new Date(item.openTime).getTime() <= currentTime
+                                  ? "🟢 Sedang Dibuka"
+                                  : `⏳ Buka: ${new Date(item.openTime).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}`}
+                              </span>
+                            )}
                           </div>
 
                           {item.link ? (
