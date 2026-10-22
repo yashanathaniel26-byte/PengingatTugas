@@ -305,6 +305,13 @@ export async function GET(req: NextRequest) {
       updated: Math.floor(Date.now() / 1000),
       items,
       count: items.length,
+      debug: {
+        version: "v2.1.2",
+        targetUrl: targetUrl.includes("authtoken")
+          ? targetUrl.replace(/authtoken=[^&]+/, "authtoken=REDACTED")
+          : targetUrl,
+        icsLength: icsText.length,
+      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
