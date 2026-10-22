@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import seedJson from "../../data/database.json";
 
 export interface UserRecord {
   id: string;
@@ -83,16 +84,8 @@ const DB_PATH = process.env.VERCEL
   : SEED_DB_PATH;
 
 function getInitialSchema(): DatabaseSchema {
-  return {
-    users: [],
-    tasks: [],
-    notes: [],
-    sessions: [],
-    settings: {
-      telegramAlertsEnabled: true,
-      notifiedAlerts: {},
-    },
-  };
+  // SAFETY: Seed database JSON is verified to match DatabaseSchema structure
+  return JSON.parse(JSON.stringify(seedJson)) as DatabaseSchema;
 }
 
 function ensureDatabase(): DatabaseSchema {
@@ -102,22 +95,14 @@ function ensureDatabase(): DatabaseSchema {
     mkdirSync(dir, { recursive: true });
   }
 
+  const initial = getInitialSchema();
+
   if (!existsSync(DB_PATH)) {
-    if (existsSync(SEED_DB_PATH)) {
-      try {
-        const seedRaw = readFileSync(SEED_DB_PATH, "utf-8");
-
-        writeFileSync(DB_PATH, seedRaw, "utf-8");
-      } catch {
-        const initial = getInitialSchema();
-
-        writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf-8");
-      }
-    } else {
-      const initial = getInitialSchema();
-
+    try {
       writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf-8");
-    }
+    } catch {}
+
+    return initial;
   }
 
   try {
@@ -126,24 +111,41 @@ function ensureDatabase(): DatabaseSchema {
     // SAFETY: Validated parsed schema fields below with Array.isArray checks
     const parsed = JSON.parse(raw) as Partial<DatabaseSchema>;
 
-    const defaultSettings: GlobalSettings = {
+    const defaultSettings: GlobalSettings = initial.settings || {
       telegramAlertsEnabled: true,
       notifiedAlerts: {},
     };
 
+    const users = Array.isArray(parsed.users) ? parsed.users : [];
+    const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    const notes = Array.isArray(parsed.notes) ? parsed.notes : [];
+    const sessions = Array.isArray(parsed.sessions) ? parsed.sessions : [];
+    const settings = parsed.settings ?? defaultSettings;
+
+    // Ensure default seeded users like yasir are always present even on fresh Vercel /tmp instances
+    for (const seedUser of initial.users) {
+      if (!users.some((u) => u.username === seedUser.username || u.id === seedUser.id)) {
+        users.push(seedUser);
+      }
+    }
+
+    if (!settings.icalUrl && initial.settings?.icalUrl) {
+      settings.icalUrl = initial.settings.icalUrl;
+    }
+
     return {
-      users: Array.isArray(parsed.users) ? parsed.users : [],
-      tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
-      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
-      sessions: Array.isArray(parsed.sessions) ? parsed.sessions : [],
-      settings: parsed.settings ?? defaultSettings,
+      users,
+      tasks,
+      notes,
+      sessions,
+      settings,
     };
   } catch {
-    const fallback = getInitialSchema();
+    try {
+      writeFileSync(DB_PATH, JSON.stringify(initial, null, 2), "utf-8");
+    } catch {}
 
-    writeFileSync(DB_PATH, JSON.stringify(fallback, null, 2), "utf-8");
-
-    return fallback;
+    return initial;
   }
 }
 

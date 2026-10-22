@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser, getGlobalSettings, getAllUsers } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export type ItemStatus = "sudah" | "belum" | "draft" | "tertinggal";
 
 export interface DeadlineEvent {
@@ -187,10 +190,34 @@ const DEFAULT_LMS_PROXY = "https://lms-proxy.yashanathaniel26.workers.dev/?url="
 export function normalizeIcalUrl(url: string): string {
   const trimmed = url.trim();
 
-  if (trimmed.includes("?url=http")) {
+  // Support Google Calendar embed URLs
+  if (trimmed.includes("calendar.google.com/calendar/embed")) {
+    try {
+      const parsedUrl = new URL(trimmed);
+      const srcParam = parsedUrl.searchParams.get("src");
+
+      if (srcParam) {
+        return `https://calendar.google.com/calendar/ical/${encodeURIComponent(srcParam)}/public/basic.ics`;
+      }
+    } catch {}
+  }
+
+  if (trimmed.includes("?url=")) {
     const splitIdx = trimmed.indexOf("?url=");
     const base = trimmed.substring(0, splitIdx);
-    const inner = trimmed.substring(splitIdx + 5);
+    let inner = trimmed.substring(splitIdx + 5);
+
+    try {
+      while (inner.includes("%25") || inner.includes("%3A") || inner.includes("%2F") || inner.includes("%3F")) {
+        const decoded = decodeURIComponent(inner);
+
+        if (decoded === inner) {
+          break;
+        }
+
+        inner = decoded;
+      }
+    } catch {}
 
     return `${base}?url=${encodeURIComponent(inner)}`;
   }
@@ -249,7 +276,7 @@ export async function GET(req: NextRequest) {
         Accept: "text/calendar, text/plain, */*",
         "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
       },
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
 
     if (!res.ok) {
