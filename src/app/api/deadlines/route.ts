@@ -306,11 +306,12 @@ export async function GET(req: NextRequest) {
       items,
       count: items.length,
       debug: {
-        version: "v2.1.2",
+        version: "v2.1.3",
         targetUrl: targetUrl.includes("authtoken")
           ? targetUrl.replace(/authtoken=[^&]+/, "authtoken=REDACTED")
           : targetUrl,
         icsLength: icsText.length,
+        preview: icsText.slice(0, 300),
       },
     });
   } catch (err: unknown) {
