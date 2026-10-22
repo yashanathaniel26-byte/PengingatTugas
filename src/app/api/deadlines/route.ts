@@ -181,6 +181,8 @@ export function parseIcs(text: string): DeadlineEvent[] {
   return events;
 }
 
+const DEFAULT_LMS_PROXY = "https://lms-proxy.yashanathaniel26.workers.dev/?url=";
+
 export function normalizeIcalUrl(url: string): string {
   const trimmed = url.trim();
 
@@ -190,6 +192,10 @@ export function normalizeIcalUrl(url: string): string {
     const inner = trimmed.substring(splitIdx + 5);
 
     return `${base}?url=${encodeURIComponent(inner)}`;
+  }
+
+  if (trimmed.includes("lms.telkomuniversity.ac.id") && !trimmed.includes("workers.dev")) {
+    return `${DEFAULT_LMS_PROXY}${encodeURIComponent(trimmed)}`;
   }
 
   return trimmed;
