@@ -12,7 +12,7 @@
       "whatsappAlertsEnabled": true,
       "telegramBotToken": "8658692614:AAFEe9y3wSanpCs3qF4gJ2o4QH7-shC6bso",
       "telegramAlertsEnabled": true,
-      "icalUrl": "https://lms.telkomuniversity.ac.id/calendar/export_execute.php?userid=108419&authtoken=6f9ab04d572e5bd6291ca101dff0e3587bdf4df2&preset_what=all&preset_time=recentupcoming",
+      "icalUrl": "https://calendar.google.com/calendar/ical/1us8oin2kmeakb6a0i4m19hgcbbcada8%40import.calendar.google.com/public/basic.ics",
       "notifiedAlerts": {},
       "notifiedWhatsAppAlerts": {}
     }
@@ -34,7 +34,7 @@
   "notes": [],
   "sessions": [],
   "settings": {
-    "icalUrl": "https://lms.telkomuniversity.ac.id/calendar/export_execute.php?userid=108419&authtoken=6f9ab04d572e5bd6291ca101dff0e3587bdf4df2&preset_what=all&preset_time=recentupcoming",
+    "icalUrl": "https://calendar.google.com/calendar/ical/1us8oin2kmeakb6a0i4m19hgcbbcada8%40import.calendar.google.com/public/basic.ics",
     "telegramAlertsEnabled": true,
     "notifiedAlerts": {},
     "whatsappAlertsEnabled": true,

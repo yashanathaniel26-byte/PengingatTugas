@@ -298,6 +298,24 @@ export async function GET(req: NextRequest) {
     }
 
     const icsText = await res.text();
+
+    if (icsText.includes("<title>Just a moment...</title>") || icsText.includes("<!DOCTYPE html>")) {
+      const fallbackUrl = "https://calendar.google.com/calendar/ical/1us8oin2kmeakb6a0i4m19hgcbbcada8%40import.calendar.google.com/public/basic.ics";
+      const fallbackRes = await fetch(fallbackUrl, { cache: "no-store" });
+
+      if (fallbackRes.ok) {
+        const fallbackText = await fallbackRes.text();
+        const fallbackItems = parseIcs(fallbackText);
+
+        return NextResponse.json({
+          configured: true,
+          updated: Math.floor(Date.now() / 1000),
+          items: fallbackItems,
+          count: fallbackItems.length,
+        });
+      }
+    }
+
     const items = parseIcs(icsText);
 
     return NextResponse.json({
@@ -305,14 +323,6 @@ export async function GET(req: NextRequest) {
       updated: Math.floor(Date.now() / 1000),
       items,
       count: items.length,
-      debug: {
-        version: "v2.1.3",
-        targetUrl: targetUrl.includes("authtoken")
-          ? targetUrl.replace(/authtoken=[^&]+/, "authtoken=REDACTED")
-          : targetUrl,
-        icsLength: icsText.length,
-        preview: icsText.slice(0, 300),
-      },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
