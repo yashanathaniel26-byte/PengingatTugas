@@ -15,7 +15,7 @@ import {
   markTaskDoneByTitleOrId,
   getAllNotes,
 } from "@/lib/db";
-import { parseIcs } from "@/app/api/deadlines/route";
+import { parseIcs, normalizeIcalUrl } from "@/app/api/deadlines/route";
 
 interface TelegramChat {
   id: number | string;
@@ -57,7 +57,9 @@ async function getActiveTasksList(): Promise<{ upcoming: AlertTaskInfo[]; overdu
 
   if (targetUrl) {
     try {
-      const res = await fetch(targetUrl, {
+      const fetchUrl = normalizeIcalUrl(targetUrl);
+
+      const res = await fetch(fetchUrl, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

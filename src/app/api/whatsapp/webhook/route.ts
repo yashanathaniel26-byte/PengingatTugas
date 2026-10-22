@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllUsers, getUserTasks, addTask, markTaskDoneByTitleOrId, getGlobalSettings } from "@/lib/db";
-import { parseIcs } from "@/app/api/deadlines/route";
+import { parseIcs, normalizeIcalUrl } from "@/app/api/deadlines/route";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { AlertTaskInfo } from "@/lib/telegram";
 
@@ -32,7 +32,9 @@ async function getUserActiveTasks(userId: string, icalUrl?: string): Promise<{ u
 
   if (targetUrl) {
     try {
-      const res = await fetch(targetUrl, {
+      const fetchUrl = normalizeIcalUrl(targetUrl);
+
+      const res = await fetch(fetchUrl, {
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",

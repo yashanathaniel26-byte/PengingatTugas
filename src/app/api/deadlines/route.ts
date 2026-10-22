@@ -181,11 +181,25 @@ export function parseIcs(text: string): DeadlineEvent[] {
   return events;
 }
 
+export function normalizeIcalUrl(url: string): string {
+  const trimmed = url.trim();
+
+  if (trimmed.includes("?url=http")) {
+    const splitIdx = trimmed.indexOf("?url=");
+    const base = trimmed.substring(0, splitIdx);
+    const inner = trimmed.substring(splitIdx + 5);
+
+    return `${base}?url=${encodeURIComponent(inner)}`;
+  }
+
+  return trimmed;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const customUrl = searchParams.get("url");
   const envUrl = process.env.ICAL_URL;
-  const targetUrl = customUrl || envUrl;
+  let targetUrl = customUrl || envUrl;
 
   if (!targetUrl) {
     return NextResponse.json(
@@ -198,6 +212,8 @@ export async function GET(req: NextRequest) {
       { status: 200 }
     );
   }
+
+  targetUrl = normalizeIcalUrl(targetUrl);
 
   try {
     const res = await fetch(targetUrl, {
