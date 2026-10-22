@@ -26,6 +26,8 @@ import {
   Tag,
   Send,
   Upload,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export type ItemStatus = "sudah" | "belum" | "draft" | "tertinggal";
@@ -186,6 +188,8 @@ export default function Home() {
 
   // Filters & controls
   const [activeFilter, setActiveFilter] = useState<FilterKey>("semua");
+  const [timeRange, setTimeRange] = useState<"semua" | "1minggu" | "1bulan">("semua");
+  const [showTertinggalList, setShowTertinggalList] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [notifGranted, setNotifGranted] = useState(false);
 
@@ -1132,6 +1136,41 @@ export default function Home() {
       const isDone = Boolean(doneMap[item.id]);
       const effStatus = getItemEffectiveStatus(item, isDone, currentTime);
 
+      // Filter Rentang Waktu (1 Minggu / 1 Bulan)
+      if (timeRange === "1minggu") {
+        const dueMs = new Date(item.due).getTime();
+
+        if (activeFilter === "tertinggal") {
+          const sevenDaysAgo = currentTime - 7 * 24 * 60 * 60 * 1000;
+
+          if (dueMs < sevenDaysAgo || dueMs > currentTime) {
+            return false;
+          }
+        } else {
+          const sevenDaysLater = currentTime + 7 * 24 * 60 * 60 * 1000;
+
+          if (dueMs < currentTime || dueMs > sevenDaysLater) {
+            return false;
+          }
+        }
+      } else if (timeRange === "1bulan") {
+        const dueMs = new Date(item.due).getTime();
+
+        if (activeFilter === "tertinggal") {
+          const thirtyDaysAgo = currentTime - 30 * 24 * 60 * 60 * 1000;
+
+          if (dueMs < thirtyDaysAgo || dueMs > currentTime) {
+            return false;
+          }
+        } else {
+          const thirtyDaysLater = currentTime + 30 * 24 * 60 * 60 * 1000;
+
+          if (dueMs < currentTime || dueMs > thirtyDaysLater) {
+            return false;
+          }
+        }
+      }
+
       if (activeFilter === "tertinggal" && effStatus !== "tertinggal") {
         return false;
       }
@@ -1171,7 +1210,7 @@ export default function Home() {
 
       return true;
     });
-  }, [allItems, activeFilter, searchQuery, doneMap, currentTime]);
+  }, [allItems, activeFilter, timeRange, searchQuery, doneMap, currentTime]);
 
   // List of items that are TERTINGGAL (overdue and not completed)
   const tertinggalItems = useMemo(() => {
@@ -1422,81 +1461,113 @@ export default function Home() {
               </div>
             )}
 
-            {/* Bagian Khusus: Tugas Tertinggal (Paling Atas) */}
+            {/* Bagian Khusus: Tugas Tertinggal (Ringkas & Collapsible) */}
             {tertinggalItems.length > 0 && activeFilter !== "sudah" && (
               <section className="tertinggal-container">
                 <div className="tertinggal-header">
                   <div className="tertinggal-title">
-                    <AlertTriangle size={18} />
+                    <AlertTriangle size={17} />
                     <span>Perhatian: {tertinggalItems.length} Tugas Tertinggal</span>
                   </div>
-                  <span style={{ fontSize: "0.8rem", opacity: 0.85 }}>
-                    Belum dikerjakan &amp; lewat tenggat
-                  </span>
+
+                  <div className="tertinggal-actions">
+                    <button
+                      type="button"
+                      className="tertinggal-toggle-btn"
+                      onClick={() => setShowTertinggalList((prev) => !prev)}
+                      title={showTertinggalList ? "Sembunyikan daftar" : "Buka daftar tugas"}
+                    >
+                      {showTertinggalList ? (
+                        <>
+                          <ChevronUp size={14} /> Sembunyikan
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown size={14} /> Buka ({tertinggalItems.length})
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="tertinggal-filter-btn"
+                      onClick={() => {
+                        setActiveFilter("tertinggal");
+                        setTimeRange("semua");
+                      }}
+                      title="Tampilkan tugas tertinggal di timeline utama"
+                    >
+                      Fokuskan
+                    </button>
+                  </div>
                 </div>
 
-                {tertinggalItems.map((item) => (
-                  <article
-                    key={`late-${item.id}`}
-                    className="task-item is-late"
-                    style={{ marginBottom: "8px" }}
-                  >
-                    <input
-                      type="checkbox"
-                      className="task-checkbox"
-                      checked={Boolean(doneMap[item.id])}
-                      onChange={() => toggleDone(item.id)}
-                      aria-label="Tandai selesai"
-                    />
+                {showTertinggalList && (
+                  <div className="tertinggal-list">
+                    {tertinggalItems.map((item) => (
+                      <article
+                        key={`late-${item.id}`}
+                        className="task-item is-late"
+                        style={{ marginBottom: "8px" }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="task-checkbox"
+                          checked={Boolean(doneMap[item.id])}
+                          onChange={() => toggleDone(item.id)}
+                          aria-label="Tandai selesai"
+                        />
 
-                    <div className="task-content">
-                      <div className="task-badges">
-                        <span className="status-pill status-tertinggal">TERTINGGAL</span>
-                        <span className={`type-pill type-${item.type}`}>{item.type}</span>
-                        <span className="course-tag">{item.course}</span>
-                      </div>
+                        <div className="task-content">
+                          <div className="task-badges">
+                            <span className="status-pill status-tertinggal">TERTINGGAL</span>
+                            <span className={`type-pill type-${item.type}`}>{item.type}</span>
+                            <span className="course-tag">{item.course}</span>
+                          </div>
 
-                      {item.link ? (
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="task-title"
-                        >
-                          {item.title}
-                        </a>
-                      ) : (
-                        <span className="task-title">{item.title}</span>
-                      )}
-                    </div>
+                          {item.link ? (
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="task-title"
+                            >
+                              {item.title}
+                            </a>
+                          ) : (
+                            <span className="task-title">{item.title}</span>
+                          )}
+                        </div>
 
-                    <div className="task-meta">
-                      <div className="time-str">
-                        {new Date(item.due).toLocaleDateString("id-ID", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </div>
+                        <div className="task-meta">
+                          <div className="time-str">
+                            {new Date(item.due).toLocaleDateString("id-ID", {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </div>
 
-                      <span className="relative-badge late">
-                        Lewat {getRelativeText(new Date(item.due).getTime(), "tertinggal").text.replace("Tertinggal ", "")}
-                      </span>
+                          <span className="relative-badge late">
+                            Lewat {getRelativeText(new Date(item.due).getTime(), "tertinggal").text.replace("Tertinggal ", "")}
+                          </span>
 
-                      {item.link && (
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-ghost btn-icon"
-                          style={{ width: "28px", height: "28px" }}
-                          title="Buka Link LMS"
-                        >
-                          <ExternalLink size={14} />
-                        </a>
-                      )}
-                    </div>
-                  </article>
-                ))}
+                          {item.link && (
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn btn-ghost btn-icon"
+                              style={{ width: "28px", height: "28px" }}
+                              title="Buka Link LMS"
+                            >
+                              <ExternalLink size={14} />
+                            </a>
+                          )}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
               </section>
             )}
 
@@ -1578,7 +1649,17 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="stat-card">
+              <div
+                className="stat-card"
+                style={{ cursor: stats.overdue > 0 ? "pointer" : "default" }}
+                onClick={() => {
+                  if (stats.overdue > 0) {
+                    setActiveFilter("tertinggal");
+                    setTimeRange("semua");
+                  }
+                }}
+                title={stats.overdue > 0 ? "Klik untuk melihat tugas tertinggal" : undefined}
+              >
                 <div className="stat-label" style={{ color: "var(--accent-red)" }}>
                   <AlertTriangle size={15} />
                   Tertinggal
@@ -1599,7 +1680,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Controls: Search, Tabs & Refresh */}
+            {/* Controls: Search, Timeframe Tabs, Category Tabs & Refresh */}
             <div className="controls-bar">
               <div className="search-row">
                 <div className="search-input-wrapper">
@@ -1624,18 +1705,56 @@ export default function Home() {
                 </button>
               </div>
 
-              <div className="filter-tabs" role="tablist">
-                {FILTER_KEYS.map((key) => (
+              {/* Filter Rentang Waktu (1 Minggu / 1 Bulan / Semua) */}
+              <div className="time-filter-bar">
+                <span className="time-filter-label">
+                  <Clock size={13} /> Rentang:
+                </span>
+                <div className="time-filter-tabs" role="group" aria-label="Filter Rentang Waktu">
                   <button
-                    key={key}
-                    role="tab"
-                    aria-selected={activeFilter === key}
-                    className={`tab-btn ${activeFilter === key ? "active" : ""}`}
-                    onClick={() => setActiveFilter(key)}
+                    type="button"
+                    className={`time-tab-btn ${timeRange === "semua" ? "active" : ""}`}
+                    onClick={() => setTimeRange("semua")}
                   >
-                    {TYPE_LABELS[key]}
+                    Semua Waktu
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    className={`time-tab-btn ${timeRange === "1minggu" ? "active" : ""}`}
+                    onClick={() => setTimeRange("1minggu")}
+                  >
+                    ⚡ 1 Minggu
+                  </button>
+                  <button
+                    type="button"
+                    className={`time-tab-btn ${timeRange === "1bulan" ? "active" : ""}`}
+                    onClick={() => setTimeRange("1bulan")}
+                  >
+                    📅 1 Bulan
+                  </button>
+                </div>
+              </div>
+
+              <div className="filter-tabs" role="tablist">
+                {FILTER_KEYS.map((key) => {
+                  let badge = "";
+
+                  if (key === "tertinggal" && stats.overdue > 0) {
+                    badge = ` (${stats.overdue})`;
+                  }
+
+                  return (
+                    <button
+                      key={key}
+                      role="tab"
+                      aria-selected={activeFilter === key}
+                      className={`tab-btn ${activeFilter === key ? "active" : ""}`}
+                      onClick={() => setActiveFilter(key)}
+                    >
+                      {TYPE_LABELS[key]}{badge}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1645,7 +1764,11 @@ export default function Home() {
                 <Calendar size={36} className="empty-icon" />
                 <div className="empty-title">Tidak ada tugas ditemukan</div>
                 <p style={{ fontSize: "0.875rem" }}>
-                  {searchQuery ? "Coba ubah kata kunci pencarian Anda." : "Semua tugas pada filter ini telah beres."}
+                  {timeRange !== "semua"
+                    ? `Tidak ada tugas dalam rentang ${timeRange === "1minggu" ? "1 minggu" : "1 bulan"} ini.`
+                    : searchQuery
+                    ? "Coba ubah kata kunci pencarian Anda."
+                    : "Semua tugas pada filter ini telah beres."}
                 </p>
               </div>
             ) : (
