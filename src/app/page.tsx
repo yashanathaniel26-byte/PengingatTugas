@@ -25,6 +25,7 @@ import {
   Pin,
   Tag,
   Send,
+  Upload,
 } from "lucide-react";
 
 export type ItemStatus = "sudah" | "belum" | "draft" | "tertinggal";
@@ -215,6 +216,10 @@ export default function Home() {
   const [whatsappDevice, setWhatsappDevice] = useState<FonnteDeviceState | null>(null);
   const [whatsappTesting, setWhatsappTesting] = useState(false);
   const [whatsappTestStatus, setWhatsappTestStatus] = useState<TelegramStatusFeedback | null>(null);
+
+  // ICS file upload state
+  const [uploadingIcs, setUploadingIcs] = useState(false);
+  const [uploadIcsMsg, setUploadIcsMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Auth form state
   const [authUsername, setAuthUsername] = useState("");
@@ -953,6 +958,51 @@ export default function Home() {
 
     setShowSettings(false);
     fetchDeadlines(cleanUrl);
+  };
+
+  // Upload and parse .ics calendar file
+  const handleUploadIcsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    setUploadingIcs(true);
+    setUploadIcsMsg(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/deadlines/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Gagal mengimpor file .ics");
+      }
+
+      setUploadIcsMsg({
+        type: "success",
+        text: data.message || "Berhasil mengimpor tugas dari file kalender!",
+      });
+
+      await checkSession();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      setUploadIcsMsg({
+        type: "error",
+        text: message,
+      });
+    } finally {
+      setUploadingIcs(false);
+      e.target.value = "";
+    }
   };
 
   // Auth handler: Login & Register
@@ -2264,6 +2314,55 @@ export default function Home() {
 
                   <div
                     style={{
+                      borderTop: "1px dashed var(--border)",
+                      marginTop: "14px",
+                      paddingTop: "14px",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Upload size={14} />
+                      <span>Atau Unggah Langsung File Kalender (.ics)</span>
+                    </label>
+                    <p style={{ fontSize: "0.78rem", color: "var(--text-sub)", marginBottom: "8px" }}>
+                      Jika server Vercel dibatasi firewall Cloudflare LMS kampus, Anda bisa klik tombol <strong>Export</strong> di halaman kalender LMS lalu pilih filenya di sini. Seluruh tugas akan otomatis tersinkron ke dashboard &amp; bot WhatsApp/Telegram!
+                    </p>
+                    <label
+                      className="btn btn-secondary"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        cursor: uploadingIcs ? "wait" : "pointer",
+                        width: "100%",
+                        justifyContent: "center",
+                        fontSize: "0.82rem",
+                      }}
+                    >
+                      <Upload size={14} className={uploadingIcs ? "spin" : ""} />
+                      <span>{uploadingIcs ? "Mengimpor Data..." : "Pilih File icalexport.ics"}</span>
+                      <input
+                        type="file"
+                        accept=".ics,text/calendar"
+                        onChange={handleUploadIcsFile}
+                        disabled={uploadingIcs}
+                        style={{ display: "none" }}
+                      />
+                    </label>
+
+                    {uploadIcsMsg && (
+                      <div
+                        className={`telegram-feedback-box ${uploadIcsMsg.type}`}
+                        style={{ marginTop: "10px", marginBottom: "0" }}
+                      >
+                        <span>{uploadIcsMsg.type === "success" ? "✓" : "!"}</span>
+                        <span>{uploadIcsMsg.text}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
                       fontSize: "0.8rem",
                       color: "var(--text-sub)",
                       lineHeight: "1.5",
@@ -2274,12 +2373,12 @@ export default function Home() {
                       marginBottom: "16px",
                     }}
                   >
-                    <strong>Cara mendapatkan link iCal:</strong>
+                    <strong>Cara download / export file iCal dari LMS CeLOE:</strong>
                     <ol style={{ paddingLeft: "18px", marginTop: "4px" }}>
                       <li>Buka <code>lms.telkomuniversity.ac.id/calendar/view.php</code></li>
                       <li>Scroll ke paling bawah, klik <strong>Export calendar</strong></li>
                       <li>Pilih: <em>All events</em> &amp; <em>Recent and next 60 days</em></li>
-                      <li>Klik <strong>Get calendar URL</strong> dan salin linknya ke sini</li>
+                      <li>Klik tombol <strong>Export</strong> untuk mendownload file <code>icalexport.ics</code>, lalu unggah di atas.</li>
                     </ol>
                   </div>
                 </>
