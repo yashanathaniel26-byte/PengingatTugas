@@ -231,9 +231,9 @@ export function parseIcs(text: string): DeadlineEvent[] {
     let suffix: "opens" | "closes" | "is_due" | "other" = "other";
     let baseTitle = rawTitle;
 
-    const closesMatch = rawTitle.match(/^(.*?)\s+closes$/i);
-    const opensMatch = rawTitle.match(/^(.*?)\s+opens$/i);
-    const isDueMatch = rawTitle.match(/^(.*?)\s+is due$/i);
+    const closesMatch = rawTitle.match(/^(.*?)\s+(?:closes|ditutup|tutup)$/i);
+    const opensMatch = rawTitle.match(/^(.*?)\s+(?:opens|dibuka|buka)$/i);
+    const isDueMatch = rawTitle.match(/^(.*?)\s+(?:is due|jatuh tempo|tenggat)$/i);
 
     if (closesMatch) {
       suffix = "closes";
@@ -260,12 +260,15 @@ export function parseIcs(text: string): DeadlineEvent[] {
     });
   }
 
-  // Map opens events by baseTitle so we can pair with closes events
+  // Map opens events by course + baseTitle so we can pair with closes events accurately
   const opensMap = new Map<string, RawEventItem>();
   const pairedOpenIds = new Set<string>();
 
   for (const item of rawEvents) {
     if (item.suffix === "opens") {
+      const key = `${item.course.toLowerCase()}:::${item.baseTitle.toLowerCase()}`;
+      opensMap.set(key, item);
+      // Fallback without course in case course names differ slightly
       opensMap.set(item.baseTitle.toLowerCase(), item);
     }
   }
@@ -275,7 +278,8 @@ export function parseIcs(text: string): DeadlineEvent[] {
   // 1. Process closes events (the genuine deadline for quizzes)
   for (const item of rawEvents) {
     if (item.suffix === "closes") {
-      const openCounterpart = opensMap.get(item.baseTitle.toLowerCase());
+      const key = `${item.course.toLowerCase()}:::${item.baseTitle.toLowerCase()}`;
+      const openCounterpart = opensMap.get(key) || opensMap.get(item.baseTitle.toLowerCase());
 
       if (openCounterpart) {
         pairedOpenIds.add(openCounterpart.id);
