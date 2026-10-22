@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getSessionUser, getGlobalSettings, getAllUsers } from "@/lib/db";
 
 export type ItemStatus = "sudah" | "belum" | "draft" | "tertinggal";
 
@@ -204,8 +205,27 @@ export function normalizeIcalUrl(url: string): string {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const customUrl = searchParams.get("url");
+
+  // 1. Session user icalUrl
+  const token = req.cookies.get("pt_session")?.value;
+  const user = token ? getSessionUser(token) : null;
+  const userIcal = user?.icalUrl;
+
+  // 2. Global settings icalUrl
+  const settings = getGlobalSettings();
+  const globalIcal = settings.icalUrl;
+
+  // 3. Fallback to default user (e.g. yasir) in database
+  let fallbackUserIcal: string | undefined;
+
+  if (!userIcal && !globalIcal) {
+    const allUsers = getAllUsers();
+    const yasir = allUsers.find((u) => u.username === "yasir") || allUsers[0];
+    fallbackUserIcal = yasir?.icalUrl;
+  }
+
   const envUrl = process.env.ICAL_URL;
-  let targetUrl = customUrl || envUrl;
+  let targetUrl = customUrl || userIcal || globalIcal || fallbackUserIcal || envUrl;
 
   if (!targetUrl) {
     return NextResponse.json(
