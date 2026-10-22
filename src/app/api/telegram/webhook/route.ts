@@ -59,7 +59,10 @@ async function getActiveTasksList(): Promise<{ upcoming: AlertTaskInfo[]; overdu
     try {
       const res = await fetch(targetUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PengingatTugas/1.0",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Accept: "text/calendar, text/plain, */*",
+          "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
         },
         next: { revalidate: 300 },
       });

@@ -202,16 +202,25 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(targetUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PengingatTugas/1.0",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "text/calendar, text/plain, */*",
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
       },
       next: { revalidate: 300 },
     });
 
     if (!res.ok) {
+      let detail = `LMS merespon dengan status ${res.status} (${res.statusText})`;
+
+      if (res.status === 403) {
+        detail = "LMS merespon 403 Forbidden. Pastikan link kalender berasal dari tombol 'Get Calendar URL' di menu Export Calendar Moodle dan bukan link halaman biasa.";
+      }
+
       return NextResponse.json(
         {
           configured: true,
-          error: `LMS merespon dengan status ${res.status} (${res.statusText})`,
+          error: detail,
           updated: Math.floor(Date.now() / 1000),
           items: [],
         },

@@ -14,9 +14,11 @@ interface FonnteWebhookPayload {
 // Normalize phone number for matching
 function normalizePhone(p: string): string {
   const clean = p.replace(/\D/g, "");
+
   if (clean.startsWith("0")) {
     return "62" + clean.substring(1);
   }
+
   return clean;
 }
 
@@ -32,7 +34,10 @@ async function getUserActiveTasks(userId: string, icalUrl?: string): Promise<{ u
     try {
       const res = await fetch(targetUrl, {
         headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PengingatTugas/1.0",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Accept: "text/calendar, text/plain, */*",
+          "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
         },
         next: { revalidate: 300 },
       });
@@ -77,6 +82,7 @@ async function getUserActiveTasks(userId: string, icalUrl?: string): Promise<{ u
 
   allTasks.forEach((t) => {
     const dueMs = new Date(t.due).getTime();
+
     if (dueMs < now) {
       overdue.push(t);
     } else {
@@ -99,6 +105,7 @@ export async function POST(req: NextRequest) {
 
   try {
     if (contentType.includes("application/json")) {
+      // SAFETY: Validated standard JSON webhook payload from Fonnte
       const body = (await req.json()) as FonnteWebhookPayload;
       sender = String(body.sender || "").trim();
       message = String(body.message || "").trim();
@@ -160,11 +167,13 @@ export async function POST(req: NextRequest) {
       const topTasks = upcoming.slice(0, 5);
       topTasks.forEach((t, i) => {
         const d = new Date(t.due);
+
         const dateStr = d.toLocaleDateString("id-ID", {
           day: "numeric",
           month: "short",
           weekday: "short",
         });
+
         const timeStr = d.toLocaleTimeString("id-ID", {
           hour: "2-digit",
           minute: "2-digit",
@@ -174,6 +183,7 @@ export async function POST(req: NextRequest) {
         const diffMs = d.getTime() - Date.now();
         const diffHours = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
         const diffDays = Math.floor(diffHours / 24);
+
         const remStr =
           diffDays > 0
             ? `${diffDays} hari lagi`
@@ -232,6 +242,7 @@ export async function POST(req: NextRequest) {
       const title = parts[0];
       const course = parts[1] || "Umum";
       const dueInput = parts[2] ? new Date(parts[2]) : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+
       const dueStr = isNaN(dueInput.getTime())
         ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
         : dueInput.toISOString();
